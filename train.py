@@ -88,7 +88,7 @@ def main(args):
 
     opt_backbone = torch.optim.SGD(
         params=[{'params': backbone.parameters()}],
-        lr=cfg.lr / 512 * cfg.batch_size * world_size,
+        lr=cfg.lr / 128 * cfg.batch_size * world_size,
         momentum=0.9, weight_decay=cfg.weight_decay)
 
     scheduler_backbone = torch.optim.lr_scheduler.LambdaLR(

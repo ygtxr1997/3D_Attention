@@ -7,7 +7,7 @@ cfg.sample_rate = 1
 cfg.fp16 = True
 cfg.momentum = 0.9
 cfg.weight_decay = 5e-4
-cfg.batch_size = 512  # 128
+cfg.batch_size = 64  # 128
 cfg.lr = 0.1  # 0.1 for batch size is 512
 
 cfg.nw = 20
@@ -21,13 +21,13 @@ if cfg.dataset == 'cifar-100':
     cfg.rec = '/tmp/train_tmp/cifar-100'
     cfg.nw = 0
     cfg.num_classes = 100
-    cfg.num_epoch = 200
+    cfg.num_epoch = 300
     cfg.warmup_epoch = -1
     cfg.val_targets = []
 
     def lr_step_func(epoch):
         return ((epoch + 1) / (4 + 1)) ** 2 if epoch < cfg.warmup_epoch else 0.1 ** len(
-            [m for m in [51, 101, 151] if m - 1 <= epoch])  # 0.1, 0.01, 0.001, 0.0001
+            [m for m in [151, 226, ] if m - 1 <= epoch])  # 0.1, 0.01, 0.001, 0.0001
     cfg.lr_func = lr_step_func
 
 elif cfg.dataset == "emore":
