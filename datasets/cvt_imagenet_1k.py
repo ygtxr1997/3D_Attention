@@ -22,13 +22,13 @@ train_data = torchvision.datasets.ImageNet(
         ]),
 )
 
-# test_data = torchvision.datasets.CIFAR100(
-#     root=dataset_path,
-#     train=False,
-#     transform=torchvision.transforms.Compose([
-#             torchvision.transforms.ToTensor(),
-#         ]),
-# )
+test_data = torchvision.datasets.ImageNet(
+    root=dataset_path,
+    split='val',
+    transform=torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ]),
+)
 
 
 def start_convert(target='train', dataset=train_data, num_classes=100, batch_size=128):
@@ -82,8 +82,8 @@ def start_convert(target='train', dataset=train_data, num_classes=100, batch_siz
 if __name__ == '__main__':
 
     """ Start Convert """
-    start_convert('train', train_data, 1000, 1)
-    # start_convert('test', test_data, 1000, 128)
+    # start_convert('train', train_data, 1000, 1)
+    # start_convert('test', test_data, 1000, 1)
 
     """ Check for train """
     print('=====> Checking training dataset')
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     check_rec_path = os.path.join(dataset_path, check_target + '.rec')
     read_record = mx.recordio.MXIndexedRecordIO(check_idx_path, check_rec_path, 'r')
 
-    for idx in range(10):
+    for idx in range(100):
         item = read_record.read_idx(idx)
         header, s = mx.recordio.unpack(item)
 
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     check_rec_path = os.path.join(dataset_path, check_target + '.rec')
     read_record = mx.recordio.MXIndexedRecordIO(check_idx_path, check_rec_path, 'r')
 
-    for idx in range(10):
+    for idx in range(100):
         item = read_record.read_idx(idx)
         header, s = mx.recordio.unpack(item)
 

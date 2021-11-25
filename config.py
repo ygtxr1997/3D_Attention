@@ -14,7 +14,7 @@ cfg.nw = 20
 
 """ Setting EXP ID """
 cfg.exp_id = 0
-cfg.output = "tmp_" + str(cfg.exp_id)
+cfg.output = "cbamres18_" + str(cfg.exp_id)
 print('output path: ', cfg.output)
 
 if cfg.dataset == 'cifar-100':

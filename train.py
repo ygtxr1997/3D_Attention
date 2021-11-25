@@ -98,7 +98,7 @@ def main(args):
     total_step = int(len(trainset) / cfg.batch_size / world_size * cfg.num_epoch)
     if rank is 0: logging.info("Total Step is: %d" % total_step)
 
-    callback_logging = CallBackLogging(10, rank, total_step, cfg.batch_size, world_size, None)
+    callback_logging = CallBackLogging(50, rank, total_step, cfg.batch_size, world_size, None)
     callback_checkpoint = CallBackModelCheckpoint(rank, cfg.output)
 
     loss = AverageMeter()
@@ -120,8 +120,9 @@ def main(args):
         for step, (img, label) in enumerate(train_loader):
             global_step += 1
 
-            final_pred = backbone(img)
-            cls_loss = cls_criterion(final_pred, label)
+            with torch.cuda.amp.autocast(cfg.fp16):
+                final_pred = backbone(img)
+                cls_loss = cls_criterion(final_pred, label)
 
             if cfg.fp16:
                 grad_scaler.scale(cls_loss).backward()

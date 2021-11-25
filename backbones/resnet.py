@@ -144,24 +144,33 @@ class ResNet(nn.Module):
 
         return output
 
+
 def _resnet(arch, block, layers, **kwargs):
     model = ResNet(block, layers, **kwargs)
     return model
 
+
 def resnet18(**kwargs):
     return _resnet('resnet18', BasicBlock, [2, 2, 2, 2], **kwargs)
+
 
 def resnet34(**kwargs):
     return _resnet('resnet34', BasicBlock, [3, 4, 6, 3], **kwargs)
 
+
 def resnet50(**kwargs):
     return _resnet('resnet50', BottleNeck, [3, 4, 6, 3], **kwargs)
 
+
 def resnet101(**kwargs):
     return _resnet('resnet101', BottleNeck, [3, 4, 23, 3], **kwargs)
+
 
 def resnet152(**kwargs):
     return _resnet('resnet152', BottleNeck, [3, 8, 36, 3], **kwargs)
 
 
+if __name__ == '__main__':
+
+    print('nothing')
 
