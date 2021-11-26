@@ -44,7 +44,7 @@ def main(args):
 
     log_root = logging.getLogger()
     init_logging(log_root, rank, cfg.output)
-
+    #TODO:处理数据时加上 RANDOM ERASING
     trainset = MXCifarTrainDataset(
         root_dir=cfg.rec,
         local_rank=rank,
@@ -110,6 +110,10 @@ def main(args):
 
     cls_criterion = torch.nn.CrossEntropyLoss()
 
+    #TODO: ER LOSS损失
+    #ER LOSS 还没想好用什么损失函数
+    ER_criterion = torch.nn.CrossEntropyLoss()
+
     for epoch in range(start_epoch, cfg.num_epoch):
         train_sampler.set_epoch(epoch)
         if epoch < args.resume and rank == 0:
@@ -122,6 +126,16 @@ def main(args):
 
             with torch.cuda.amp.autocast(cfg.fp16):
                 final_pred = backbone(img)
+                #TODO：how to update the ER LOSS
+                """
+                #multi-level ER LOSS，3D atten 反卷积后与原图比较(创新点2)
+                final_pred,d1,d2,d3,d4 = model(input_var)
+                loss1= ER_criterion(d1, img)
+                loss2= ER_criterion(d2, img)
+                loss3= ER_criterion(d3, img)
+                loss4= ER_criterion(d4, img)
+                ER_loss=loss1+loss2+loss3+loss4 #而how to use and update the loss？
+                """
                 cls_loss = cls_criterion(final_pred, label)
 
             if cfg.fp16:

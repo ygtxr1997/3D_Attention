@@ -4,7 +4,7 @@ from torch.utils import data
 from tqdm import tqdm
 
 import mxnet as mx
-
+import utils.transforms as tran
 import os
 import numpy as np
 import numbers
@@ -12,12 +12,14 @@ import numbers
 from PIL import Image
 
 dataset_path = '/home/yuange/dataset/cifar-100'
+#TODO:是加入pytorch的ER还是使用论文源码的ER(代码中的：transforms.py)
 
 train_data = torchvision.datasets.CIFAR100(
     root=dataset_path,
     train=True,
     transform=torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
+            tran.RandomErasing(probability=0.5, sh=0.4, r1=0.3),#使用ER loss再加入
         ]),
     download=True
 )

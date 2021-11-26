@@ -10,8 +10,8 @@
 
 import torch
 import torch.nn as nn
-
-
+from torchinfo import summary
+from backbones.Atten3D import  *
 __all__ = ['resnet18', 'resnet34', 'resnet50', 'resnet101']
 
 
@@ -99,11 +99,34 @@ class ResNet(nn.Module):
             nn.ReLU(inplace=True))
         #we use a different inputsize than the original paper
         #so conv2_x's stride is 1
-        self.conv2_x = self._make_layer(block, 64, num_block[0], 1)
-        self.conv3_x = self._make_layer(block, 128, num_block[1], 2)
-        self.conv4_x = self._make_layer(block, 256, num_block[2], 2)
-        self.conv5_x = self._make_layer(block, 512, num_block[3], 2)
-        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+
+        # --------------------------stage 2------------------------------
+        self.Atten2 = Atten3D(64, 8, 12, 2)  # 输出为32*32*64
+        """self.upsample2 = nn.ConvTranspose2d(64, 3, kernel_size=3, stride=1, padding=1) # conv1的对应deconv(这是使用ER LOSS才用的),针对ImageNet的"""
+        self.conv2_x = self._make_layer(block, 64, num_block[0], 1) #输出为32*32*256
+        # 全部stride改为1，提前下采样，不用在bottleneck里面下采样(因为要满足3D Atten的输入尺寸)
+        self.down2 = nn.Conv2d(256, 256, kernel_size=1, stride=2, bias=False)#输出为16*16*256
+
+        #--------------------------stage 3------------------------------
+        self.Atten3 = Atten3D(256, 4, 3, 3)  # 输出为16*16*256
+        """self.upsample3 = nn.ConvTranspose2d(256, 64, kernel_size=1, stride=2, padding=0,
+                                            output_padding=1)  # 3D Atten的反卷积，(这是使用ER LOSS才用的)"""
+        self.conv3_x = self._make_layer(block, 128, num_block[1], 1)#输出为16*16*512
+        self.down3 = nn.Conv2d(512, 512, kernel_size=1, stride=2, bias=False)# 输出为8*8*512
+
+        # --------------------------stage 4------------------------------
+        self.Atten4 = Atten3D(512, 4, 3, 4)  # 输出为8*8*512
+        """self.upsample4 = nn.ConvTranspose2d(512, 256, kernel_size=1, stride=2, padding=0,
+                                            output_padding=1)  # 3D Atten的反卷积(ER LOSS使用)"""
+        self.conv4_x = self._make_layer(block, 256, num_block[2], 1)#输出为8*8*1024
+        self.down4 = nn.Conv2d(1024, 1024, kernel_size=1, stride=2, bias=False)# 输出为4*4*1024
+
+        # --------------------------stage 5------------------------------
+        self.Atten5 = Atten3D(1024, 4, 3, 5)  # 输出为4*4*1024
+        """self.upsample5 = nn.ConvTranspose2d(1024, 512, kernel_size=1, stride=2, padding=0,
+                                            output_padding=1)  # 3D Atten的反卷积(ER LOSS使用)"""
+        self.conv5_x = self._make_layer(block, 512, num_block[3], 1)#输出为4*4*2048
+        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))#输出为1*1*2048
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
     def _make_layer(self, block, out_channels, num_blocks, stride):
@@ -123,6 +146,8 @@ class ResNet(nn.Module):
 
         # we have num_block blocks per layer, the first block
         # could be 1 or 2, other blocks would always be 1
+        # 这里在stage3-stage5的下采样被提前了，所以残差块里面的步长都变为1(因为要适配3D Atten的输入,对照上面的每个self.conv_x，都是stride=1)
+        # 咨询了老板，那个提前的下采样(也就是self.down)，可以用3*3/s2/pad1或者用原残差里面的1*1/s2/pad0(说试试效果，我这里全用了后者)
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
         for stride in strides:
@@ -133,16 +158,56 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         with torch.cuda.amp.autocast(self.fp16):
+            # ----------------stage1----------------
             output = self.conv1(x)
+
+            #----------------stage2----------------
+            atten = self.Atten2(output)  # 3D atten branch
+            """
+            deAtten2 = self.upsample2(atten)  #deConv for ER LOSS
+            """
+            output = output * atten  # dot product
             output = self.conv2_x(output)
+            output = self.down2(output)
+
+            # ----------------stage3----------------
+            atten = self.Atten3(output)
+            """
+            deAtten3 = self.upsample3(atten)
+            deAtten3 = self.upsample2(deAtten3)  # two deConv for ER LOSS
+            """
+            output = output * atten  # dot product
             output = self.conv3_x(output)
+            output = self.down3(output)
+
+            # ----------------stage4----------------
+            atten = self.Atten4(output)
+            """
+            deAtten4 = self.upsample4(atten)
+            deAtten4 = self.upsample3(deAtten4)
+            deAtten4 = self.upsample2(deAtten4) #three deConv for ER LOSS
+            """
+            output = output * atten  # dot product
             output = self.conv4_x(output)
+            output = self.down4(output)
+
+            # ----------------stage5----------------
+            atten = self.Atten5(output)
+            """
+            deAtten5 = self.upsample5(atten)
+            deAtten5 = self.upsample4(deAtten5)
+            deAtten5 = self.upsample32=(deAtten5)
+            deAtten5 = self.upsample2(deAtten5) #four deConv for ER LOSS
+            """
+            output = output * atten  # dot product
             output = self.conv5_x(output)
+
+            #--------------pool+fc---------------
             output = self.avg_pool(output)
             output = output.view(output.size(0), -1)
         output = self.fc(output.float() if self.fp16 else output)
 
-        return output
+        return output#,deAtten2,deAtten3,deAtten4,deAtten5  ##for the ER LOSS
 
 
 def _resnet(arch, block, layers, **kwargs):
@@ -158,7 +223,7 @@ def resnet34(**kwargs):
     return _resnet('resnet34', BasicBlock, [3, 4, 6, 3], **kwargs)
 
 
-def resnet50(**kwargs):
+def resnet50(**kwargs):#当前模型只有resnet50，适用于32*32的cifar数据集
     return _resnet('resnet50', BottleNeck, [3, 4, 6, 3], **kwargs)
 
 
@@ -171,6 +236,7 @@ def resnet152(**kwargs):
 
 
 if __name__ == '__main__':
-
+    model = ResNet(BottleNeck, [3, 4, 6, 3], 100)
+    summary(model, input_size=(64, 3, 32, 32))
     print('nothing')
 
