@@ -13,10 +13,12 @@ import torch.nn as nn
 
 
 from torchinfo import summary
-from backbones.atten3d import  *
+# from backbones.atten3d import  *
+from atten3d import  *
 
-
-__all__ = ['resnet18_3d', 'resnet34_3d', 'resnet50_3d', 'resnet50_de', 'resnet50_3d_de', 'resnet50_all', 'resnet50_er', 'resnet101_3d']
+__all__ = ['resnet18_3d', 'resnet34_3d', 'resnet50_3d',
+           'resnet50_de', 'resnet50_3d_de', 'resnet50_all',
+           'resnet50_er', 'resnet101_3d']
 
 
 class BasicBlock(nn.Module):
@@ -89,13 +91,16 @@ class BottleNeck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, num_block, num_classes=100,
+    def __init__(self, block, num_block,
+                 dataset: str,
+                 num_classes=100,
                  fp16=False,
                  en_atten3d=False,
                  en_defor=False,
                  en_erloss=False):
         super().__init__()
 
+        self.dataset = dataset
         self.fp16 = fp16
 
         self.in_channels = 64
@@ -104,18 +109,26 @@ class ResNet(nn.Module):
         self.en_defor = en_defor  # Enable Deformable Conv
         self.en_erloss = en_erloss  # Enable ER_LOSS
 
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace = True))
-        #we use a different inputsize than the original paper
-        #so conv2_x's stride is 1
+        if self.dataset == 'cifar-100':
+            self.conv1 = nn.Sequential(
+                nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
+                nn.BatchNorm2d(64),
+                nn.ReLU(inplace=True))
+        elif self.dataset == 'imagenet-1k':
+            self.conv1 = nn.Sequential(
+                nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
+                nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+                nn.BatchNorm2d(64),
+                nn.ReLU(inplace=True))
+        else:
+            raise ValueError
 
         # --------------------------stage 2------------------------------
         self.Atten2 = Atten3D(64, 8, 12, 2) if self.en_atten3d else nn.Identity()  # 输出为32*32*64
         """self.upsample2 = nn.ConvTranspose2d(64, 3, kernel_size=3, stride=1, padding=1)  # conv1的对应deconv(这是使用ER LOSS才用的),针对ImageNet的"""
         self.conv2_x = self._make_layer(block, 64, num_block[0], 1)  #输出为32*32*256
         # 全部stride改为1，提前下采样，不用在bottleneck里面下采样(因为要满足3D Atten的输入尺寸)
+        # TODO: 这里强行设置成 256, 只能匹配 resnet50, 而无法满足 resnet18, resnet34
         self.down2 = nn.Conv2d(256, 256, kernel_size=1, stride=2, bias=False)  # 输出为16*16*256
 
         #--------------------------stage 3------------------------------
@@ -169,17 +182,18 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         with torch.cuda.amp.autocast(self.fp16):
-            # ----------------stage1----------------
+            # ---------------- stage1 ----------------
             output = self.conv1(x)
 
-            #----------------stage2----------------
+            # ---------------- stage2 ----------------
+            # TODO: 这里的 Atten2 只能满足 cifar-100, 无法满足 imagenet-1k 的尺寸
             atten = self.Atten2(output)  # 3D atten branch
             deAtten2 = self.upsample2(atten) if self.en_erloss else None  # deConv for ER LOSS
             output = output * atten  # dot product
             output = self.conv2_x(output)
             output = self.down2(output)
 
-            # ----------------stage3----------------
+            # ---------------- stage3 ----------------
             atten = self.Atten3(output)
             if self.en_erloss:  # two deConv for ER LOSS
                 deAtten3 = self.upsample3(atten) 
@@ -189,7 +203,7 @@ class ResNet(nn.Module):
             output = self.conv3_x(output)
             output = self.down3(output)
 
-            # ----------------stage4----------------
+            # ---------------- stage4 ----------------
             atten = self.Atten4(output)
             if self.en_erloss:  # three deConv for ER LOSS
                 deAtten4 = self.upsample4(atten)
@@ -200,7 +214,7 @@ class ResNet(nn.Module):
             output = self.conv4_x(output)
             output = self.down4(output)
 
-            # ----------------stage5----------------
+            # ---------------- stage5 ----------------
             atten = self.Atten5(output)
             if self.en_erloss:  # four deConv for ER LOSS
                 deAtten5 = self.upsample5(atten)
@@ -211,7 +225,7 @@ class ResNet(nn.Module):
             output = output * atten  # dot product
             output = self.conv5_x(output)
 
-            # --------------pool+fc---------------
+            # -------------- pool+fc ---------------
             output = self.avg_pool(output)
             output = output.view(output.size(0), -1)
         output = self.fc(output.float() if self.fp16 else output)
@@ -228,36 +242,50 @@ def _resnet(arch, block, layers, **kwargs):
 
 
 def resnet18_3d(**kwargs):
-    return _resnet('resnet18', BasicBlock, [2, 2, 2, 2], **kwargs)
+    return _resnet('resnet18', BasicBlock, [2, 2, 2, 2],
+                   en_atten3d=True,
+                   **kwargs)
+
+
+def resnet18_3d_de(**kwargs):
+    return _resnet('resnet18', BasicBlock, [2, 2, 2, 2],
+                   en_atten3d=True, en_defor=True,
+                   **kwargs)
 
 
 def resnet34_3d(**kwargs):
-    return _resnet('resnet34', BasicBlock, [3, 4, 6, 3], **kwargs)
+    return _resnet('resnet34', BasicBlock, [3, 4, 6, 3],
+                   en_atten3d=True,
+                   **kwargs)
+
+def resnet34_3d_de(**kwargs):
+    return _resnet('resnet34', BasicBlock, [3, 4, 6, 3],
+                   en_atten3d=True, en_defor=True,
+                   **kwargs)
 
 
-# 暂时只在resnet50上设置5种模式
 def resnet50_3d(**kwargs):  # 3D
-    return _resnet('resnet50', BottleNeck, [3, 4, 6, 3], **kwargs)
-
-
-def resnet50_de(**kwargs):  # Deformable
-    return _resnet('resnet50', BottleNeck, [3, 4, 6, 3], **kwargs)
+    return _resnet('resnet50', BottleNeck, [3, 4, 6, 3],
+                   en_atten3d=True,
+                   **kwargs)
 
 
 def resnet50_3d_de(**kwargs):  # 3D+Deformable
-    return _resnet('resnet50', BottleNeck, [3, 4, 6, 3], **kwargs)
-
-
-def resnet50_er(**kwargs):  # ER_LOSS
-    return _resnet('resnet50', BottleNeck, [3, 4, 6, 3], **kwargs)
-
-
-def resnet50_all(**kwargs):  # ALL
-    return _resnet('resnet50', BottleNeck, [3, 4, 6, 3], **kwargs)
+    return _resnet('resnet50', BottleNeck, [3, 4, 6, 3],
+                   en_atten3d=True, en_defor=True,
+                   **kwargs)
 
 
 def resnet101_3d(**kwargs):
-    return _resnet('resnet101', BottleNeck, [3, 4, 23, 3], **kwargs)
+    return _resnet('resnet101', BottleNeck, [3, 4, 23, 3],
+                   en_atten3d=True,
+                   **kwargs)
+
+
+def resnet101_3d_de(**kwargs):
+    return _resnet('resnet101', BottleNeck, [3, 4, 23, 3],
+                   en_atten3d=True, en_defor=True,
+                   **kwargs)
 
 
 def resnet152_3d(**kwargs):
@@ -268,7 +296,7 @@ if __name__ == '__main__':
 
     print('=== Check for CIFAR-100 ===')
     img = torch.randn((1, 3, 32, 32)).cuda()
-    backbone = resnet18_3d(
+    backbone = resnet50_3d_de(
         dataset='cifar-100',
         num_classes=1000,
         fp16=False).cuda()
@@ -277,7 +305,7 @@ if __name__ == '__main__':
 
     print('=== Check for ImageNet-1k ===')
     img = torch.randn((1, 3, 224, 224)).cuda()
-    backbone = resnet18_3d(
+    backbone = resnet50_3d_de(
         dataset='imagenet-1k',
         num_classes=1000,
         fp16=False).cuda()
