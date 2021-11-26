@@ -85,18 +85,31 @@ class BottleNeck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, num_block, num_classes=100,
+    def __init__(self, block, num_block,
+                 dataset: str,
+                 num_classes=100,
                  fp16=False):
         super().__init__()
 
+        self.dataset = dataset
         self.fp16 = fp16
 
         self.in_channels = 64
 
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True))
+        if self.dataset == 'cifar-100':
+            self.conv1 = nn.Sequential(
+                nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
+                nn.BatchNorm2d(64),
+                nn.ReLU(inplace=True))
+        elif self.dataset == 'imagenet-1k':
+            self.conv1 = nn.Sequential(
+                nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
+                nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+                nn.BatchNorm2d(64),
+                nn.ReLU(inplace=True))
+        else:
+            raise ValueError
+
         #we use a different inputsize than the original paper
         #so conv2_x's stride is 1
 
@@ -236,7 +249,21 @@ def resnet152(**kwargs):
 
 
 if __name__ == '__main__':
-    model = ResNet(BottleNeck, [3, 4, 6, 3], 100)
-    summary(model, input_size=(64, 3, 32, 32))
-    print('nothing')
+    print('=== Check for CIFAR-100 ===')
+    img = torch.randn((1, 3, 32, 32)).cuda()
+    backbone = resnet18(
+        dataset='cifar-100',
+        num_classes=1000,
+        fp16=False).cuda()
+    pred = backbone(img)
+    print(pred.shape)
+
+    print('=== Check for ImageNet-1k ===')
+    img = torch.randn((1, 3, 224, 224)).cuda()
+    backbone = resnet18(
+        dataset='imagenet-1k',
+        num_classes=1000,
+        fp16=False).cuda()
+    pred = backbone(img)
+    print(pred.shape)
 
