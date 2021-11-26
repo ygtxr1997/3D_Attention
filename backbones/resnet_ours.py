@@ -13,7 +13,7 @@ import torch.nn as nn
 
 
 from torchinfo import summary
-from backbones.Atten3D import  *
+from backbones.atten3d import  *
 
 
 __all__ = ['resnet18_3d', 'resnet34_3d', 'resnet50_3d', 'resnet50_de', 'resnet50_3d_de', 'resnet50_all', 'resnet50_er', 'resnet101_3d']

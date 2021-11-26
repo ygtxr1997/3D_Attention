@@ -112,17 +112,18 @@ class MXFaceDataset(Dataset):
 
 
 class MXCifarTrainDataset(Dataset):
-    def __init__(self, root_dir, local_rank):
+    def __init__(self, root_dir, local_rank,
+                 re_p=0.):
         super(MXCifarTrainDataset, self).__init__()
         self.transform = transforms.Compose(
             [transforms.ToPILImage(),
              transforms.RandomCrop(32, padding=4),
              transforms.RandomHorizontalFlip(),
              transforms.RandomRotation(15),
+             transforms.RandomErasing(p=re_p),
              transforms.ToTensor(),
              transforms.Normalize(mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],
                                   std=[0.2673342858792401, 0.2564384629170883, 0.27615047132568404]),  # to [-1, 1]
-             transforms.RandomErasing()  # Train use random erasing
              ])
         self.root_dir = root_dir
         self.local_rank = local_rank
@@ -205,13 +206,15 @@ class MXImageNet1kTrainDataset(Dataset):
     """
     Refer to https://github.com/kuan-wang/pytorch-mobilenet-v3
     """
-    def __init__(self, root_dir, local_rank):
+    def __init__(self, root_dir, local_rank,
+                 re_p=0.):
         super(MXImageNet1kTrainDataset, self).__init__()
         self.input_size = 224
         self.transform = transforms.Compose(
             [transforms.ToPILImage(),
              transforms.RandomResizedCrop(self.input_size),
              transforms.RandomHorizontalFlip(),
+             transforms.RandomErasing(p=re_p),
              transforms.ToTensor(),
              transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                   std=[0.229, 0.224, 0.225]),  # to [-1, 1]
@@ -254,7 +257,7 @@ class MXImageNet1kTestDataset(Dataset):
     """
     Refer to https://github.com/kuan-wang/pytorch-mobilenet-v3
     """
-    def __init__(self, root_dir, local_rank):
+    def __init__(self, root_dir, local_rank,):
         super(MXImageNet1kTestDataset, self).__init__()
         self.input_size = 224
         self.transform = transforms.Compose(
