@@ -146,8 +146,9 @@ def main(args):
                     lr = param_group['lr']
                 print(lr)
 
-        if rank == 0 and epoch % 10 == 9:
-            print('10 epoch finished, start evaluate')
+        if epoch % 10 == 9:
+            if rank == 0:
+                logging.info('10 epochs finished, start evaluate')
             backbone.eval()
             correct_1 = 0.0
             correct_5 = 0.0

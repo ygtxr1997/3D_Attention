@@ -13,8 +13,8 @@ cfg.lr = 0.1  # 0.1 for batch size is 512
 cfg.nw = 20
 
 """ Setting EXP ID """
-cfg.exp_id = 0
-cfg.output = "cbamres18_" + str(cfg.exp_id)
+cfg.exp_id = 2
+cfg.output = "res18_" + str(cfg.exp_id)
 print('output path: ', cfg.output)
 
 if cfg.dataset == 'cifar-100':
