@@ -9,7 +9,7 @@ cfg.momentum = 0.9
 cfg.weight_decay = 5e-4
 cfg.batch_size = 64  # 128
 cfg.lr = 0.1  # 0.1 for batch size is 512
-
+cfg.en_erloss = False  # ER_LOSS
 cfg.nw = 20
 
 """ Setting EXP ID """

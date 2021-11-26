@@ -122,6 +122,7 @@ class MXCifarTrainDataset(Dataset):
              transforms.ToTensor(),
              transforms.Normalize(mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],
                                   std=[0.2673342858792401, 0.2564384629170883, 0.27615047132568404]),  # to [-1, 1]
+             transforms.RandomErasing()  # Train use random erasing
              ])
         self.root_dir = root_dir
         self.local_rank = local_rank
