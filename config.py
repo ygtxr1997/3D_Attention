@@ -1,7 +1,7 @@
 from easydict import EasyDict as edict
 
 cfg = edict()
-cfg.dataset = "cifar-100"
+cfg.dataset = "imagenet-1k"
 cfg.embedding_size = 512
 cfg.sample_rate = 1
 cfg.fp16 = True
@@ -13,7 +13,7 @@ cfg.lr = 0.1  # 0.1 for batch size is 512
 cfg.nw = 20
 
 """ Setting EXP ID """
-cfg.exp_id = 2
+cfg.exp_id = 3
 cfg.output = "res18_" + str(cfg.exp_id)
 print('output path: ', cfg.output)
 
@@ -28,6 +28,21 @@ if cfg.dataset == 'cifar-100':
     def lr_step_func(epoch):
         return ((epoch + 1) / (4 + 1)) ** 2 if epoch < cfg.warmup_epoch else 0.1 ** len(
             [m for m in [151, 226, ] if m - 1 <= epoch])  # 0.1, 0.01, 0.001, 0.0001
+    cfg.lr_func = lr_step_func
+
+elif cfg.dataset == 'imagenet-1k':
+    cfg.rec = '/home/yuange/dataset/imagenet_1k'
+    cfg.nw = 8
+    cfg.num_classes = 1000
+    cfg.num_epoch = 90
+    cfg.warmup_epoch = -1
+    cfg.val_targets = []
+
+    cfg.batch_size = 64
+
+    def lr_step_func(epoch):
+        return ((epoch + 1) / (4 + 1)) ** 2 if epoch < cfg.warmup_epoch else 0.1 ** len(
+            [m for m in [31, 61, ] if m - 1 <= epoch])  # 0.1, 0.01, 0.001, 0.0001
     cfg.lr_func = lr_step_func
 
 elif cfg.dataset == "emore":

@@ -26,7 +26,7 @@ python cvt_cifar_100.py
 * {*Optional*} For faster IO, you can copy your datasets folder (containing 'train.rec' and 'train.idx') to memory using this:
 ```shell script
 sudo mkdir /tmp/train_tmp
-mount -t tmpfs -o size=10G tmpfs /tmp/train_tmp
+sudo mount -t tmpfs -o size=10G tmpfs /tmp/train_tmp
 cp -r {Your_Datasets_Folder} /tmp/train_tmp  
 # you may get /tmp/train_tmp/cifar-100/train.rec...
 ```

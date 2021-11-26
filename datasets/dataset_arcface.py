@@ -198,3 +198,101 @@ class MXCifarTestDataset(Dataset):
 
     def __len__(self):
         return len(self.imgidx)
+
+
+class MXImageNet1kTrainDataset(Dataset):
+    """
+    Refer to https://github.com/kuan-wang/pytorch-mobilenet-v3
+    """
+    def __init__(self, root_dir, local_rank):
+        super(MXImageNet1kTrainDataset, self).__init__()
+        self.input_size = 224
+        self.transform = transforms.Compose(
+            [transforms.ToPILImage(),
+             transforms.RandomResizedCrop(self.input_size),
+             transforms.RandomHorizontalFlip(),
+             transforms.ToTensor(),
+             transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                  std=[0.229, 0.224, 0.225]),  # to [-1, 1]
+             ])
+        self.root_dir = root_dir
+        self.local_rank = local_rank
+        path_imgrec = os.path.join(root_dir, 'train.rec')
+        path_imgidx = os.path.join(root_dir, 'train.idx')
+        self.imgrec = mx.recordio.MXIndexedRecordIO(path_imgidx, path_imgrec, 'r')
+        s = self.imgrec.read_idx(0)
+        header, _ = mx.recordio.unpack(s)
+        if header.flag > 0:
+            self.header0 = (int(header.label[0]), int(header.label[1]))  # cnt_sample, cnt_class
+            self.imgidx = np.array(range(1, int(header.label[0])))
+            if local_rank == 0:
+                print('**** [imagenet-1k-train] flag>0, cnt_sample=%d, cnt_class=%d ****' % (
+                    int(header.label[0]) - 1, int(header.label[1])))
+        else:
+            self.imgidx = np.array(list(self.imgrec.keys))
+            raise ValueError
+
+    def __getitem__(self, index):
+        idx = self.imgidx[index]
+        s = self.imgrec.read_idx(idx)
+        header, img = mx.recordio.unpack(s)
+        label = header.label
+        if not isinstance(label, numbers.Number):
+            label = label[0]
+        label = torch.tensor(label, dtype=torch.long)
+        sample = mx.image.imdecode(img).asnumpy()  # (112, 112, 3)
+        if self.transform is not None:
+            sample = self.transform(sample)
+        return sample, label
+
+    def __len__(self):
+        return len(self.imgidx)
+
+
+class MXImageNet1kTestDataset(Dataset):
+    """
+    Refer to https://github.com/kuan-wang/pytorch-mobilenet-v3
+    """
+    def __init__(self, root_dir, local_rank):
+        super(MXImageNet1kTestDataset, self).__init__()
+        self.input_size = 224
+        self.transform = transforms.Compose(
+            [transforms.ToPILImage(),
+             transforms.Resize(int(self.input_size / 0.875)),
+             transforms.CenterCrop(self.input_size),
+             transforms.ToTensor(),
+             transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                  std=[0.229, 0.224, 0.225]),  # to [-1, 1]
+             ])
+        self.root_dir = root_dir
+        self.local_rank = local_rank
+        path_imgrec = os.path.join(root_dir, 'test.rec')
+        path_imgidx = os.path.join(root_dir, 'test.idx')
+        self.imgrec = mx.recordio.MXIndexedRecordIO(path_imgidx, path_imgrec, 'r')
+        s = self.imgrec.read_idx(0)
+        header, _ = mx.recordio.unpack(s)
+        if header.flag > 0:
+            self.header0 = (int(header.label[0]), int(header.label[1]))  # cnt_sample, cnt_class
+            self.imgidx = np.array(range(1, int(header.label[0])))
+            if local_rank == 0:
+                print('**** [imagenet-1k-test] flag>0, cnt_sample=%d, cnt_class=%d ****' % (
+                    int(header.label[0]) - 1, int(header.label[1])))
+        else:
+            self.imgidx = np.array(list(self.imgrec.keys))
+            raise ValueError
+
+    def __getitem__(self, index):
+        idx = self.imgidx[index]
+        s = self.imgrec.read_idx(idx)
+        header, img = mx.recordio.unpack(s)
+        label = header.label
+        if not isinstance(label, numbers.Number):
+            label = label[0]
+        label = torch.tensor(label, dtype=torch.long)
+        sample = mx.image.imdecode(img).asnumpy()  # (112, 112, 3)
+        if self.transform is not None:
+            sample = self.transform(sample)
+        return sample, label
+
+    def __len__(self):
+        return len(self.imgidx)
