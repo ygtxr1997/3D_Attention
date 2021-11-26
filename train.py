@@ -12,7 +12,6 @@ from torch.nn.utils import clip_grad_norm_
 from config import cfg
 from datasets.dataset_arcface import DataLoaderX
 from datasets.dataset_arcface import MXCifarTrainDataset, MXCifarTestDataset
-from datasets.dataset_arcface import MXImageNet1kTrainDataset, MXImageNet1kTestDataset
 from utils.utils_callbacks import CallBackLogging, CallBackModelCheckpoint
 from utils.utils_logging import AverageMeter, init_logging
 from utils.utils_amp import MaxClipGradScaler
@@ -46,18 +45,10 @@ def main(args):
     log_root = logging.getLogger()
     init_logging(log_root, rank, cfg.output)
 
-    if cfg.dataset == 'cifar-100':
-        trainset = MXCifarTrainDataset(
-            root_dir=cfg.rec,
-            local_rank=rank,
-        )
-    elif cfg.dataset == 'imagenet-1k':
-        trainset = MXImageNet1kTrainDataset(
-            root_dir=cfg.rec,
-            local_rank=rank,
-        )
-    else:
-        raise ValueError
+    trainset = MXCifarTrainDataset(
+        root_dir=cfg.rec,
+        local_rank=rank,
+    )
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         trainset, shuffle=True,
     )
@@ -66,25 +57,16 @@ def main(args):
         sampler=train_sampler, num_workers=cfg.nw, pin_memory=True, drop_last=True
     )
 
-    if cfg.dataset == 'cifar-100':
-        testset = MXCifarTestDataset(
-            root_dir=cfg.rec,
-            local_rank=rank,
-        )
-    elif cfg.dataset == 'imagenet-1k':
-        testset = MXImageNet1kTestDataset(
-            root_dir=cfg.rec,
-            local_rank=rank,
-        )
-    else:
-        raise ValueError
+    testset = MXCifarTestDataset(
+        root_dir=cfg.rec,
+        local_rank=rank,
+    )
     test_loader = DataLoaderX(
         local_rank=local_rank, dataset=testset, batch_size=cfg.batch_size,
         num_workers=cfg.nw, pin_memory=True, drop_last=False
     )
 
     backbone = eval("backbones.{}".format(args.network))(
-        dataset=cfg.dataset,
         fp16=cfg.fp16,
         num_classes=cfg.num_classes
     ).to(local_rank)
@@ -128,6 +110,10 @@ def main(args):
 
     cls_criterion = torch.nn.CrossEntropyLoss()
 
+    # TODO: ER LOSS损失
+    # ER LOSS 还没想好用什么损失函数
+    ER_criterion = torch.nn.CrossEntropyLoss()
+
     for epoch in range(start_epoch, cfg.num_epoch):
         train_sampler.set_epoch(epoch)
         if epoch < args.resume and rank == 0:
@@ -140,6 +126,19 @@ def main(args):
 
             with torch.cuda.amp.autocast(cfg.fp16):
                 final_pred = backbone(img)
+                # TODO：how to update the ER LOSS
+                """
+                # multi-level ER LOSS，3D atten 反卷积后与原图比较(创新点2)
+                if not cfg.en_erloss:  # 不使用ER_LOSS
+                    final_pred = backbone(img)
+                else:  # 使用ER_LOSS
+                    final_pred, d1, d2, d3, d4 = model(img)
+                    loss1 = ER_criterion(d1, img)
+                    loss2 = ER_criterion(d2, img)
+                    loss3 = ER_criterion(d3, img)
+                    loss4 = ER_criterion(d4, img)
+                    ER_loss = loss1 + loss2 + loss3 + loss4  # how to use and update the loss？
+                """
                 cls_loss = cls_criterion(final_pred, label)
 
             if cfg.fp16:
@@ -162,9 +161,9 @@ def main(args):
             if global_step % 1000 == 0:
                 for param_group in opt_backbone.param_groups:
                     lr = param_group['lr']
-                if rank == 0: print(lr)
+                print(lr)
 
-        if epoch % 10 == 9 and rank == 0:
+        if epoch % 10 == 9:
             if rank == 0:
                 logging.info('10 epochs finished, start evaluate')
             backbone.eval()
