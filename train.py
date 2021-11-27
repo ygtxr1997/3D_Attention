@@ -12,6 +12,7 @@ from torch.nn.utils import clip_grad_norm_
 from config import cfg
 from datasets.dataset_arcface import DataLoaderX
 from datasets.dataset_arcface import MXCifarTrainDataset, MXCifarTestDataset
+from datasets.dataset_arcface import MXImageNet1kTrainDataset, MXImageNet1kTestDataset
 from utils.utils_callbacks import CallBackLogging, CallBackModelCheckpoint
 from utils.utils_logging import AverageMeter, init_logging
 from utils.utils_amp import MaxClipGradScaler
@@ -45,10 +46,28 @@ def main(args):
     log_root = logging.getLogger()
     init_logging(log_root, rank, cfg.output)
 
-    trainset = MXCifarTrainDataset(
-        root_dir=cfg.rec,
-        local_rank=rank,
-    )
+    if cfg.dataset == 'cifar-100':
+        trainset = MXCifarTrainDataset(
+            root_dir=cfg.rec,
+            local_rank=rank,
+            re_p=cfg.re_p,
+        )
+        testset = MXCifarTestDataset(
+            root_dir=cfg.rec,
+            local_rank=rank,
+        )
+    elif cfg.dataset == 'imagenet-1k':
+        trainset = MXImageNet1kTrainDataset(
+            root_dir=cfg.rec,
+            local_rank=rank,
+            re_p=cfg.re_p,
+        )
+        testset = MXImageNet1kTestDataset(
+            root_dir=cfg.rec,
+            local_rank=rank,
+        )
+    else:
+        raise ValueError
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         trainset, shuffle=True,
     )
@@ -57,10 +76,6 @@ def main(args):
         sampler=train_sampler, num_workers=cfg.nw, pin_memory=True, drop_last=True
     )
 
-    testset = MXCifarTestDataset(
-        root_dir=cfg.rec,
-        local_rank=rank,
-    )
     test_loader = DataLoaderX(
         local_rank=local_rank, dataset=testset, batch_size=cfg.batch_size,
         num_workers=cfg.nw, pin_memory=True, drop_last=False
@@ -163,9 +178,8 @@ def main(args):
                     lr = param_group['lr']
                 print(lr)
 
-        if epoch % 10 == 9:
-            if rank == 0:
-                logging.info('10 epochs finished, start evaluate')
+        if epoch % 10 == 9 and rank == 0:
+            logging.info('10 epochs finished, start evaluate')
             backbone.eval()
             correct_1 = 0.0
             correct_5 = 0.0
@@ -185,11 +199,10 @@ def main(args):
                     # compute top1
                     correct_1 += correct[:, :1].sum()
 
-            if rank == 0:
-                logging.info('Top 1 err: %.4f; Top 5 err: %.4f' % (
-                    1 - correct_1 / len(testset),
-                    1 - correct_5 / len(testset)
-                ))
+            logging.info('Top 1 err: %.4f; Top 5 err: %.4f' % (
+                1 - correct_1 / len(testset),
+                1 - correct_5 / len(testset)
+            ))
             backbone.train()
 
         callback_checkpoint(global_step, backbone, )
