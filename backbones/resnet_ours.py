@@ -102,7 +102,6 @@ class ResNet(nn.Module):
 
         self.dataset = dataset
         self.fp16 = fp16
-        self.block = block
 
         self.in_channels = 64
         self.expansion = block.expansion
@@ -129,28 +128,28 @@ class ResNet(nn.Module):
             raise ValueError
 
         # --------------------------stage 2------------------------------
-        self.Atten2 = Atten3D(64, self.FCSize, 12, 2) if self.en_atten3d else nn.Identity()  # 输出为32*32*64
+        self.Atten2 = Atten3D(64, self.fc_size, 12, 2) if self.en_atten3d else nn.Identity()  # 输出为32*32*64
         self.upsample2 = nn.ConvTranspose2d(64, 3, kernel_size=3, stride=1, padding=1)  # conv1的对应deconv(这是使用ER LOSS才用的),针对ImageNet的
         self.conv2_x = self._make_layer(block, 64, num_block[0], 1)  #输出为32*32*256
         # 全部stride改为1，提前下采样，不用在bottleneck里面下采样(因为要满足3D Atten的输入尺寸)
         self.down2 = nn.Conv2d(64 * self.expansion, 64 * self.expansion, kernel_size=1, stride=2, bias=False)  # 输出为16*16*256
 
         #--------------------------stage 3------------------------------
-        self.Atten3 = Atten3D(64 * self.expansion, self.FCSize // 2, 3, 3) if self.en_atten3d else nn.Identity()  # 输出为16*16*256
+        self.Atten3 = Atten3D(64 * self.expansion, self.fc_size // 2, 3, 3) if self.en_atten3d else nn.Identity()  # 输出为16*16*256
         self.upsample3 = nn.ConvTranspose2d(64 * self.expansion, 64, kernel_size=1, stride=2, padding=0,
                                             output_padding=1)  # 3D Atten的反卷积，(这是使用ER LOSS才用的)
         self.conv3_x = self._make_layer(block, 128, num_block[1], 1)  # 输出为16*16*512
         self.down3 = nn.Conv2d(128 * self.expansion, 128 * self.expansion, kernel_size=1, stride=2, bias=False)  # 输出为8*8*512
 
         # --------------------------stage 4------------------------------
-        self.Atten4 = Atten3D(128 * self.expansion, self.FCSize // 2, 3, 4) if self.en_atten3d else nn.Identity()  # 输出为8*8*512
+        self.Atten4 = Atten3D(128 * self.expansion, self.fc_size // 2, 3, 4) if self.en_atten3d else nn.Identity()  # 输出为8*8*512
         self.upsample4 = nn.ConvTranspose2d(128 * self.expansion, 64 * self.expansion, kernel_size=1, stride=2, padding=0,
                                             output_padding=1)  # 3D Atten的反卷积(ER LOSS使用)
         self.conv4_x = self._make_layer(block, 256, num_block[2], 1)  # 输出为8*8*1024
         self.down4 = nn.Conv2d(256 * self.expansion, 256 * self.expansion, kernel_size=1, stride=2, bias=False)  # 输出为4*4*1024
 
         # --------------------------stage 5------------------------------
-        self.Atten5 = Atten3D(256 * self.expansion, self.FCSize // 2, 3, 5) if self.en_atten3d else nn.Identity()  # 输出为4*4*1024
+        self.Atten5 = Atten3D(256 * self.expansion, self.fc_size // 2, 3, 5) if self.en_atten3d else nn.Identity()  # 输出为4*4*1024
         self.upsample5 = nn.ConvTranspose2d(256 * self.expansion, 128 * self.expansion, kernel_size=1, stride=2, padding=0,
                                             output_padding=1)  # 3D Atten的反卷积(ER LOSS使用)
         self.conv5_x = self._make_layer(block, 512, num_block[3], 1)  # 输出为4*4*2048
@@ -300,6 +299,7 @@ def resnet152_3d_de(**kwargs):
     return _resnet('resnet152', BottleNeck, [3, 8, 36, 3],
                    en_atten3d=True, en_defor=True,
                    **kwargs)
+
 
 if __name__ == '__main__':
 
