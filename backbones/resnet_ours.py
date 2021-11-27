@@ -102,53 +102,57 @@ class ResNet(nn.Module):
 
         self.dataset = dataset
         self.fp16 = fp16
+        self.block = block
 
         self.in_channels = 64
+        self.expansion = block.expansion
 
         self.en_atten3d = en_atten3d  # Enable Atten3D
         self.en_defor = en_defor  # Enable Deformable Conv
         self.en_erloss = en_erloss  # Enable ER_LOSS
+
 
         if self.dataset == 'cifar-100':
             self.conv1 = nn.Sequential(
                 nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
                 nn.BatchNorm2d(64),
                 nn.ReLU(inplace=True))
+            self.fc_size = 8  # Channel-Wise FC的参数，解决Cifar尺寸问题(这里当逐通道卷积个数改动时，也要发生变化)
         elif self.dataset == 'imagenet-1k':
             self.conv1 = nn.Sequential(
                 nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
                 nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
                 nn.BatchNorm2d(64),
                 nn.ReLU(inplace=True))
+            self.fc_size = 14  # Channel-Wise FC的参数，解决imageNet尺寸问题(这里当逐通道卷积个数改动时，也要发生变化)
         else:
             raise ValueError
 
         # --------------------------stage 2------------------------------
-        self.Atten2 = Atten3D(64, 8, 12, 2) if self.en_atten3d else nn.Identity()  # 输出为32*32*64
-        """self.upsample2 = nn.ConvTranspose2d(64, 3, kernel_size=3, stride=1, padding=1)  # conv1的对应deconv(这是使用ER LOSS才用的),针对ImageNet的"""
+        self.Atten2 = Atten3D(64, self.FCSize, 12, 2) if self.en_atten3d else nn.Identity()  # 输出为32*32*64
+        self.upsample2 = nn.ConvTranspose2d(64, 3, kernel_size=3, stride=1, padding=1)  # conv1的对应deconv(这是使用ER LOSS才用的),针对ImageNet的
         self.conv2_x = self._make_layer(block, 64, num_block[0], 1)  #输出为32*32*256
         # 全部stride改为1，提前下采样，不用在bottleneck里面下采样(因为要满足3D Atten的输入尺寸)
-        # TODO: 这里强行设置成 256, 只能匹配 resnet50, 而无法满足 resnet18, resnet34
-        self.down2 = nn.Conv2d(256, 256, kernel_size=1, stride=2, bias=False)  # 输出为16*16*256
+        self.down2 = nn.Conv2d(64 * self.expansion, 64 * self.expansion, kernel_size=1, stride=2, bias=False)  # 输出为16*16*256
 
         #--------------------------stage 3------------------------------
-        self.Atten3 = Atten3D(256, 4, 3, 3) if self.en_atten3d else nn.Identity()  # 输出为16*16*256
-        """self.upsample3 = nn.ConvTranspose2d(256, 64, kernel_size=1, stride=2, padding=0,
-                                            output_padding=1)  # 3D Atten的反卷积，(这是使用ER LOSS才用的)"""
+        self.Atten3 = Atten3D(64 * self.expansion, self.FCSize // 2, 3, 3) if self.en_atten3d else nn.Identity()  # 输出为16*16*256
+        self.upsample3 = nn.ConvTranspose2d(64 * self.expansion, 64, kernel_size=1, stride=2, padding=0,
+                                            output_padding=1)  # 3D Atten的反卷积，(这是使用ER LOSS才用的)
         self.conv3_x = self._make_layer(block, 128, num_block[1], 1)  # 输出为16*16*512
-        self.down3 = nn.Conv2d(512, 512, kernel_size=1, stride=2, bias=False)  # 输出为8*8*512
+        self.down3 = nn.Conv2d(128 * self.expansion, 128 * self.expansion, kernel_size=1, stride=2, bias=False)  # 输出为8*8*512
 
         # --------------------------stage 4------------------------------
-        self.Atten4 = Atten3D(512, 4, 3, 4) if self.en_atten3d else nn.Identity()  # 输出为8*8*512
-        """self.upsample4 = nn.ConvTranspose2d(512, 256, kernel_size=1, stride=2, padding=0,
-                                            output_padding=1)  # 3D Atten的反卷积(ER LOSS使用)"""
+        self.Atten4 = Atten3D(128 * self.expansion, self.FCSize // 2, 3, 4) if self.en_atten3d else nn.Identity()  # 输出为8*8*512
+        self.upsample4 = nn.ConvTranspose2d(128 * self.expansion, 64 * self.expansion, kernel_size=1, stride=2, padding=0,
+                                            output_padding=1)  # 3D Atten的反卷积(ER LOSS使用)
         self.conv4_x = self._make_layer(block, 256, num_block[2], 1)  # 输出为8*8*1024
-        self.down4 = nn.Conv2d(1024, 1024, kernel_size=1, stride=2, bias=False)  # 输出为4*4*1024
+        self.down4 = nn.Conv2d(256 * self.expansion, 256 * self.expansion, kernel_size=1, stride=2, bias=False)  # 输出为4*4*1024
 
         # --------------------------stage 5------------------------------
-        self.Atten5 = Atten3D(1024, 4, 3, 5) if self.en_atten3d else nn.Identity()  # 输出为4*4*1024
-        """self.upsample5 = nn.ConvTranspose2d(1024, 512, kernel_size=1, stride=2, padding=0,
-                                            output_padding=1)  # 3D Atten的反卷积(ER LOSS使用)"""
+        self.Atten5 = Atten3D(256 * self.expansion, self.FCSize // 2, 3, 5) if self.en_atten3d else nn.Identity()  # 输出为4*4*1024
+        self.upsample5 = nn.ConvTranspose2d(256 * self.expansion, 128 * self.expansion, kernel_size=1, stride=2, padding=0,
+                                            output_padding=1)  # 3D Atten的反卷积(ER LOSS使用)
         self.conv5_x = self._make_layer(block, 512, num_block[3], 1)  # 输出为4*4*2048
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))  # 输出为1*1*2048
         self.fc = nn.Linear(512 * block.expansion, num_classes)
@@ -186,7 +190,6 @@ class ResNet(nn.Module):
             output = self.conv1(x)
 
             # ---------------- stage2 ----------------
-            # TODO: 这里的 Atten2 只能满足 cifar-100, 无法满足 imagenet-1k 的尺寸
             atten = self.Atten2(output)  # 3D atten branch
             deAtten2 = self.upsample2(atten) if self.en_erloss else None  # deConv for ER LOSS
             output = output * atten  # dot product
@@ -196,7 +199,7 @@ class ResNet(nn.Module):
             # ---------------- stage3 ----------------
             atten = self.Atten3(output)
             if self.en_erloss:  # two deConv for ER LOSS
-                deAtten3 = self.upsample3(atten) 
+                deAtten3 = self.upsample3(atten)
                 deAtten3 = self.upsample2(deAtten3)
 
             output = output * atten  # dot product
@@ -289,8 +292,14 @@ def resnet101_3d_de(**kwargs):
 
 
 def resnet152_3d(**kwargs):
-    return _resnet('resnet152', BottleNeck, [3, 8, 36, 3], **kwargs)
+    return _resnet('resnet152', BottleNeck, [3, 8, 36, 3],
+                   en_atten3d=True,
+                   **kwargs)
 
+def resnet152_3d_de(**kwargs):
+    return _resnet('resnet152', BottleNeck, [3, 8, 36, 3],
+                   en_atten3d=True, en_defor=True,
+                   **kwargs)
 
 if __name__ == '__main__':
 
@@ -298,7 +307,7 @@ if __name__ == '__main__':
     img = torch.randn((1, 3, 32, 32)).cuda()
     backbone = resnet50_3d_de(
         dataset='cifar-100',
-        num_classes=1000,
+        num_classes=100,
         fp16=False).cuda()
     pred = backbone(img)
     print(pred.shape)
