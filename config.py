@@ -14,6 +14,7 @@ cfg.nw = 20
 
 cfg.re_p = 0.  # Random Erasing p
 cfg.en_erloss = False  # ER_LOSS
+cfg.num_deformable_groups = 2  # group of deformConv
 
 """ Setting EXP ID """
 cfg.exp_id = 3
