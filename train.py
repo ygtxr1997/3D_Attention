@@ -83,7 +83,8 @@ def main(args):
 
     backbone = eval("backbones.{}".format(args.network))(
         fp16=cfg.fp16,
-        num_classes=cfg.num_classes
+        num_classes=cfg.num_classes,
+        num_group=cfg.num_deformable_groups,
     ).to(local_rank)
 
     if args.resume:

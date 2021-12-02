@@ -1,3 +1,7 @@
+"""
+This code is a copy from https://github.com/ChunhuanLin/deform_conv_pytorch
+"""
+
 from torch.autograd import Variable, Function
 import torch
 from torch import nn

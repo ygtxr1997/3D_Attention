@@ -16,9 +16,10 @@ from torchinfo import summary
 # from backbones.atten3d import  *
 from atten3d import  *
 
-__all__ = ['resnet18_3d', 'resnet34_3d', 'resnet50_3d',
-           'resnet50_de', 'resnet50_3d_de', 'resnet50_all',
-           'resnet50_er', 'resnet101_3d']
+__all__ = ['resnet18_3d', 'resnet18_3d_de', 'resnet34_3d',
+           'resnet34_3d_de', 'resnet50_3d', 'resnet50_3d_de',
+           'resnet101_3d', 'resnet101_3d_de', 'resnet152_3d',
+           'resnet152_3d_de']
 
 
 class BasicBlock(nn.Module):
@@ -97,7 +98,8 @@ class ResNet(nn.Module):
                  fp16=False,
                  en_atten3d=False,
                  en_defor=False,
-                 en_erloss=False):
+                 en_erloss=False,
+                 num_group=2):
         super().__init__()
 
         self.dataset = dataset
@@ -109,6 +111,7 @@ class ResNet(nn.Module):
         self.en_atten3d = en_atten3d  # Enable Atten3D
         self.en_defor = en_defor  # Enable Deformable Conv
         self.en_erloss = en_erloss  # Enable ER_LOSS
+        self.num_group = num_group  # group of deformConv
 
 
         if self.dataset == 'cifar-100':
@@ -142,14 +145,14 @@ class ResNet(nn.Module):
         self.down3 = nn.Conv2d(128 * self.expansion, 128 * self.expansion, kernel_size=1, stride=2, bias=False)  # 输出为8*8*512
 
         # --------------------------stage 4------------------------------
-        self.Atten4 = Atten3D(128 * self.expansion, self.fc_size // 2, 3, 4, self.en_defor) if self.en_atten3d else nn.Identity()  # 输出为8*8*512
+        self.Atten4 = Atten3D(128 * self.expansion, self.fc_size // 2, 3, 4, self.en_defor, self.num_group) if self.en_atten3d else nn.Identity()  # 输出为8*8*512
         self.upsample4 = nn.ConvTranspose2d(128 * self.expansion, 64 * self.expansion, kernel_size=1, stride=2, padding=0,
                                             output_padding=1)  # 3D Atten的反卷积(ER LOSS使用)
         self.conv4_x = self._make_layer(block, 256, num_block[2], 1)  # 输出为8*8*1024
         self.down4 = nn.Conv2d(256 * self.expansion, 256 * self.expansion, kernel_size=1, stride=2, bias=False)  # 输出为4*4*1024
 
         # --------------------------stage 5------------------------------
-        self.Atten5 = Atten3D(256 * self.expansion, self.fc_size // 2, 3, 5, self.en_defor) if self.en_atten3d else nn.Identity()  # 输出为4*4*1024
+        self.Atten5 = Atten3D(256 * self.expansion, self.fc_size // 2, 3, 5, self.en_defor, self.num_group) if self.en_atten3d else nn.Identity()  # 输出为4*4*1024
         self.upsample5 = nn.ConvTranspose2d(256 * self.expansion, 128 * self.expansion, kernel_size=1, stride=2, padding=0,
                                             output_padding=1)  # 3D Atten的反卷积(ER LOSS使用)
         self.conv5_x = self._make_layer(block, 512, num_block[3], 1)  # 输出为4*4*2048
