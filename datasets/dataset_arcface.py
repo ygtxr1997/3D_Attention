@@ -159,7 +159,7 @@ class MXCifarTrainDataset(Dataset):
         return len(self.imgidx)
 
 
-class MXCifarTestDataset(Dataset):
+class MXCifarTestDataset(Dataset):  # test
     def __init__(self, root_dir, local_rank):
         super(MXCifarTestDataset, self).__init__()
         self.transform = transforms.Compose(
