@@ -35,7 +35,7 @@ if cfg.dataset == 'cifar-100':
     cfg.lr_func = lr_step_func
 
 elif cfg.dataset == 'imagenet-1k':
-    cfg.rec = '/home/yuange/dataset/imagenet_1k'
+    cfg.rec = '/tmp/train_tmp/imagenet_1k'
     cfg.nw = 8
     cfg.num_classes = 1000
     cfg.num_epoch = 90
