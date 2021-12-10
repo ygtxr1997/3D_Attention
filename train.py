@@ -57,14 +57,36 @@ def main(args):
             local_rank=rank,
         )
     elif cfg.dataset == 'imagenet-1k':
-        trainset = MXImageNet1kTrainDataset(
-            root_dir=cfg.rec,
-            local_rank=rank,
-            re_p=cfg.re_p,
+        # trainset = MXImageNet1kTrainDataset(
+        #     root_dir=cfg.rec,
+        #     local_rank=rank,
+        #     re_p=cfg.re_p,
+        # )
+        # testset = MXImageNet1kTestDataset(
+        #     root_dir=cfg.rec,
+        #     local_rank=rank,
+        # )
+        import torchvision
+        from torchvision import transforms
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                         std=[0.229, 0.224, 0.225])
+        trainset = torchvision.datasets.ImageFolder(
+            root=os.path.join(cfg.rec, 'train'),
+            transform=transforms.Compose([
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ])
         )
-        testset = MXImageNet1kTestDataset(
-            root_dir=cfg.rec,
-            local_rank=rank,
+        testset = torchvision.datasets.ImageFolder(
+            root=os.path.join(cfg.rec, 'val'),
+            transform=transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ])
         )
     else:
         raise ValueError
@@ -83,8 +105,9 @@ def main(args):
 
     backbone = eval("backbones.{}".format(args.network))(
         fp16=cfg.fp16,
+        dataset=cfg.dataset,
         num_classes=cfg.num_classes,
-        num_group=cfg.num_deformable_groups,
+        # num_group=cfg.num_deformable_groups,
     ).to(local_rank)
 
     if args.resume:
@@ -104,7 +127,7 @@ def main(args):
 
     opt_backbone = torch.optim.SGD(
         params=[{'params': backbone.parameters()}],
-        lr=cfg.lr / 128 * cfg.batch_size * world_size,
+        lr=cfg.lr / cfg.base_batch * cfg.batch_size * world_size,
         momentum=0.9, weight_decay=cfg.weight_decay)
 
     scheduler_backbone = torch.optim.lr_scheduler.LambdaLR(
@@ -179,7 +202,7 @@ def main(args):
                     lr = param_group['lr']
                 print(lr)
 
-        if epoch % 10 == 9 and rank == 0:
+        if epoch % 10 <= 9 and rank == 0:
             logging.info('10 epochs finished, start evaluate')
             backbone.eval()
             correct_1 = 0.0
