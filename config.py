@@ -36,7 +36,8 @@ if cfg.dataset == 'cifar-100':
     cfg.lr_func = lr_step_func
 
 elif cfg.dataset == 'imagenet-1k':
-    cfg.rec = '/tmp/train_tmp/imagenet_1k'
+    # cfg.rec = '/tmp/train_tmp/imagenet_1k'
+    cfg.rec = '/home/yuange/dataset/imagenet_1k/pytorch_imagenet'
     cfg.nw = 4
     cfg.num_classes = 1000
     cfg.num_epoch = 90
@@ -45,7 +46,7 @@ elif cfg.dataset == 'imagenet-1k':
 
     cfg.weight_decay = 1e-4
     cfg.base_batch = 256
-    cfg.batch_size = 128
+    cfg.batch_size = 64
 
     def lr_step_func(epoch):
         return ((epoch + 1) / (4 + 1)) ** 2 if epoch < cfg.warmup_epoch else 0.1 ** len(

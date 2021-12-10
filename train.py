@@ -70,8 +70,9 @@ def main(args):
         from torchvision import transforms
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                          std=[0.229, 0.224, 0.225])
-        trainset = torchvision.datasets.ImageFolder(
-            root=os.path.join(cfg.rec, 'train'),
+        trainset = torchvision.datasets.ImageNet(
+            root=cfg.rec,
+            split='train',
             transform=transforms.Compose([
                 transforms.RandomResizedCrop(224),
                 transforms.RandomHorizontalFlip(),
@@ -79,8 +80,9 @@ def main(args):
                 normalize,
             ])
         )
-        testset = torchvision.datasets.ImageFolder(
-            root=os.path.join(cfg.rec, 'val'),
+        testset = torchvision.datasets.ImageNet(
+            root=cfg.rec,
+            split='val',
             transform=transforms.Compose([
                 transforms.Resize(256),
                 transforms.CenterCrop(224),
