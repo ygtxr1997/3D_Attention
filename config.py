@@ -18,7 +18,7 @@ cfg.en_erloss = False  # ER_LOSS
 cfg.num_deformable_groups = 2  # group of deformConv
 
 """ Setting EXP ID """
-cfg.exp_id = 4
+cfg.exp_id = 5
 cfg.output = "res18_im1k" + str(cfg.exp_id)
 print('output path: ', cfg.output)
 
@@ -36,8 +36,7 @@ if cfg.dataset == 'cifar-100':
     cfg.lr_func = lr_step_func
 
 elif cfg.dataset == 'imagenet-1k':
-    # cfg.rec = '/tmp/train_tmp/imagenet_1k'
-    cfg.rec = '/home/yuange/dataset/imagenet_1k/pytorch_imagenet'
+    cfg.rec = '/tmp/train_tmp/imagenet_1k'
     cfg.nw = 4
     cfg.num_classes = 1000
     cfg.num_epoch = 90

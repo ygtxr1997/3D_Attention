@@ -31,6 +31,10 @@ def main(args):
     import mxnet as mx
     mx.random.seed(1)
 
+    import torch.backends.cudnn as cudnn
+    cudnn.deterministic = True
+    cudnn.benchmark = True
+
     world_size = int(os.environ['WORLD_SIZE'])
     rank = int(os.environ['RANK'])
     dist_url = "tcp://{}:{}".format(os.environ["MASTER_ADDR"], os.environ["MASTER_PORT"])
@@ -57,22 +61,13 @@ def main(args):
             local_rank=rank,
         )
     elif cfg.dataset == 'imagenet-1k':
-        # trainset = MXImageNet1kTrainDataset(
-        #     root_dir=cfg.rec,
-        #     local_rank=rank,
-        #     re_p=cfg.re_p,
-        # )
-        # testset = MXImageNet1kTestDataset(
-        #     root_dir=cfg.rec,
-        #     local_rank=rank,
-        # )
+        logging.info('train on im1k')
         import torchvision
         from torchvision import transforms
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                          std=[0.229, 0.224, 0.225])
-        trainset = torchvision.datasets.ImageNet(
-            root=cfg.rec,
-            split='train',
+        trainset = torchvision.datasets.ImageFolder(
+            root=os.path.join(cfg.rec, 'train'),
             transform=transforms.Compose([
                 transforms.RandomResizedCrop(224),
                 transforms.RandomHorizontalFlip(),
@@ -80,9 +75,8 @@ def main(args):
                 normalize,
             ])
         )
-        testset = torchvision.datasets.ImageNet(
-            root=cfg.rec,
-            split='val',
+        testset = torchvision.datasets.ImageFolder(
+            root=os.path.join(cfg.rec, 'val'),
             transform=transforms.Compose([
                 transforms.Resize(256),
                 transforms.CenterCrop(224),
@@ -100,10 +94,10 @@ def main(args):
         sampler=train_sampler, num_workers=cfg.nw, pin_memory=True, drop_last=True
     )
 
-    test_loader = DataLoaderX(
-        local_rank=local_rank, dataset=testset, batch_size=cfg.batch_size,
-        num_workers=cfg.nw, pin_memory=True, drop_last=False
-    )
+    test_loader = torch.utils.data.DataLoader(
+        dataset=testset,
+        batch_size=cfg.batch_size, shuffle=False,
+        num_workers=cfg.nw, pin_memory=True)
 
     backbone = eval("backbones.{}".format(args.network))(
         fp16=cfg.fp16,
@@ -205,29 +199,24 @@ def main(args):
                 print(lr)
 
         if epoch % 10 <= 9 and rank == 0:
-            logging.info('10 epochs finished, start evaluate')
+            logging.info('======== start evaluate ========')
             backbone.eval()
-            correct_1 = 0.0
-            correct_5 = 0.0
+            top1 = AverageMeter()
+            top5 = AverageMeter()
 
             with torch.no_grad():
                 for step, (img, label) in enumerate(test_loader):
+                    img = img.cuda(non_blocking=True)
+                    label = label.cuda(non_blocking=True)
                     final_pred = backbone(img)  # (B, num_classes)
 
-                    _, pred = final_pred.topk(5, 1, largest=True, sorted=True)
+                    prec1, prec5 = accuracy(final_pred, label, topk=(1, 5))
+                    top1.update(prec1[0], img.size(0))
+                    top5.update(prec5[0], img.size(0))
 
-                    label = label.view(label.size(0), -1).expand_as(pred)
-                    correct = pred.eq(label).float()
-
-                    # compute top 5
-                    correct_5 += correct[:, :5].sum()
-
-                    # compute top1
-                    correct_1 += correct[:, :1].sum()
-
-            logging.info('Top 1 err: %.4f; Top 5 err: %.4f' % (
-                1 - correct_1 / len(testset),
-                1 - correct_5 / len(testset)
+            logging.info('Top 1 acc: %.4f; Top 5 acc: %.4f' % (
+                top1.avg,
+                top5.avg,
             ))
             backbone.train()
 
@@ -235,6 +224,23 @@ def main(args):
         scheduler_backbone.step()
 
     dist.destroy_process_group()
+
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    with torch.no_grad():
+        maxk = max(topk)
+        batch_size = target.size(0)
+
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+        res = []
+        for k in topk:
+            correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
+            res.append(correct_k.mul_(100.0 / batch_size))
+        return res
 
 
 if __name__ == "__main__":
