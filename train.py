@@ -130,7 +130,8 @@ def main(args):
         optimizer=opt_backbone, lr_lambda=cfg.lr_func)
 
     start_epoch = 0
-    total_step = int(len(trainset) / cfg.batch_size / world_size * cfg.num_epoch)
+    total_step = int(len(trainset) / cfg.batch_size / world_size * (cfg.num_epoch - args.resume))
+    skip_epoch = args.resume
     if rank is 0: logging.info("Total Step is: %d" % total_step)
 
     callback_logging = CallBackLogging(50, rank, total_step, cfg.batch_size, world_size, None)
@@ -151,9 +152,11 @@ def main(args):
 
     for epoch in range(start_epoch, cfg.num_epoch):
         train_sampler.set_epoch(epoch)
-        if epoch < args.resume and rank == 0:
-            print('=====> skip epoch %d' % (epoch))
+        if epoch < args.resume:
             scheduler_backbone.step()
+            skip_epoch -= 1
+            if skip_epoch == 0 and rank == 0:
+                logging.info('=====> skip epoch [0~%d]' % (epoch))
             continue
 
         for step, (img, label) in enumerate(train_loader):
