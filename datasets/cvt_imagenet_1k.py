@@ -63,7 +63,7 @@ def start_convert(target='train', dataset=train_data, num_classes=100, batch_siz
             assert type(label) == int
 
             header = mx.recordio.IRHeader(flag=0, label=label, id=0, id2=0)
-            s = mx.recordio.pack_img(header, img, quality=95, img_fmt='.jpg')
+            s = mx.recordio.pack_img(header, img, quality=100, img_fmt='.jpg')
 
             write_record.write_idx(1 + idx * batch_size + b, s)
 
@@ -82,8 +82,8 @@ def start_convert(target='train', dataset=train_data, num_classes=100, batch_siz
 if __name__ == '__main__':
 
     """ Start Convert """
-    # start_convert('train', train_data, 1000, 1)
-    # start_convert('test', test_data, 1000, 1)
+    start_convert('train', train_data, 1000, 1)
+    start_convert('test', test_data, 1000, 1)
 
     """ Check for train """
     print('=====> Checking training dataset')
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     check_rec_path = os.path.join(dataset_path, check_target + '.rec')
     read_record = mx.recordio.MXIndexedRecordIO(check_idx_path, check_rec_path, 'r')
 
-    for idx in range(100):
+    for idx in range(10):
         item = read_record.read_idx(idx)
         header, s = mx.recordio.unpack(item)
 
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     check_rec_path = os.path.join(dataset_path, check_target + '.rec')
     read_record = mx.recordio.MXIndexedRecordIO(check_idx_path, check_rec_path, 'r')
 
-    for idx in range(100):
+    for idx in range(10):
         item = read_record.read_idx(idx)
         header, s = mx.recordio.unpack(item)
 
