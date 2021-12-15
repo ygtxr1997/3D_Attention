@@ -4,7 +4,7 @@ cfg = edict()
 cfg.dataset = "imagenet-1k"
 cfg.embedding_size = 512
 cfg.sample_rate = 1
-cfg.fp16 = True
+cfg.fp16 = False
 cfg.momentum = 0.9
 cfg.weight_decay = 5e-4
 cfg.batch_size = 64  # 128
@@ -18,7 +18,7 @@ cfg.en_erloss = False  # ER_LOSS
 cfg.num_deformable_groups = 2  # group of deformConv
 
 """ Setting EXP ID """
-cfg.exp_id = 6
+cfg.exp_id = 7
 cfg.output = "res18_im1k" + str(cfg.exp_id)
 print('output path: ', cfg.output)
 
@@ -37,7 +37,7 @@ if cfg.dataset == 'cifar-100':
 
 elif cfg.dataset == 'imagenet-1k':
     cfg.rec = '/tmp/train_tmp/imagenet_1k'
-    cfg.nw = 6
+    cfg.nw = 8
     cfg.num_classes = 1000
     cfg.num_epoch = 90
     cfg.warmup_epoch = -1

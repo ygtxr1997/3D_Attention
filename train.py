@@ -62,28 +62,37 @@ def main(args):
         )
     elif cfg.dataset == 'imagenet-1k':
         logging.info('train on im1k')
-        import torchvision
-        from torchvision import transforms
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                         std=[0.229, 0.224, 0.225])
-        trainset = torchvision.datasets.ImageFolder(
-            root=os.path.join(cfg.rec, 'train'),
-            transform=transforms.Compose([
-                transforms.RandomResizedCrop(224),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                normalize,
-            ])
+        trainset = MXImageNet1kTrainDataset(
+            root_dir=cfg.rec,
+            local_rank=rank,
+            re_p=cfg.re_p,
         )
-        testset = torchvision.datasets.ImageFolder(
-            root=os.path.join(cfg.rec, 'val'),
-            transform=transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                normalize,
-            ])
+        testset = MXImageNet1kTestDataset(
+            root_dir=cfg.rec,
+            local_rank=rank,
         )
+        # import torchvision
+        # from torchvision import transforms
+        # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+        #                                  std=[0.229, 0.224, 0.225])
+        # trainset = torchvision.datasets.ImageFolder(
+        #     root=os.path.join(cfg.rec, 'train'),
+        #     transform=transforms.Compose([
+        #         transforms.RandomResizedCrop(224),
+        #         transforms.RandomHorizontalFlip(),
+        #         transforms.ToTensor(),
+        #         normalize,
+        #     ])
+        # )
+        # testset = torchvision.datasets.ImageFolder(
+        #     root=os.path.join(cfg.rec, 'val'),
+        #     transform=transforms.Compose([
+        #         transforms.Resize(256),
+        #         transforms.CenterCrop(224),
+        #         transforms.ToTensor(),
+        #         normalize,
+        #     ])
+        # )
     else:
         raise ValueError
     train_sampler = torch.utils.data.distributed.DistributedSampler(
